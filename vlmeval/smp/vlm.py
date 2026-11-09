@@ -95,6 +95,19 @@ def resize_image_by_factor(img, factor=1):
     return img
 
 
+def _flatten_alpha(img):
+    """Paste transparent pixels onto white so RGB conversion keeps dark content visible."""
+    # decode_base64_to_image keeps 16-bit modes intact; never quantize them here.
+    if img.mode in ('I;16', 'I;16L', 'I;16B', 'I;16N'):
+        return img
+    if img.mode not in ('RGBA', 'LA', 'PA', 'RGBa') and 'transparency' not in img.info:
+        return img
+    rgba = img.convert('RGBA')
+    background = Image.new('RGB', rgba.size, (255, 255, 255))
+    background.paste(rgba, mask=rgba.getchannel('A'))
+    return background
+
+
 def encode_image_to_base64(img, target_size=-1, fmt='JPEG', max_file_size=1e9):
     from .log import get_logger
 
@@ -102,6 +115,7 @@ def encode_image_to_base64(img, target_size=-1, fmt='JPEG', max_file_size=1e9):
 
     # if target_size == -1, will not do resizing
     # else, will set the max_size ot (target_size, target_size)
+    img = _flatten_alpha(img)
     if img.mode in ('RGBA', 'P', 'LA'):
         img = img.convert('RGB')
     if target_size > 0:
@@ -157,7 +171,7 @@ def encode_image_file_to_base64(image_path, target_size=-1, fmt='JPEG', max_file
 
 def decode_base64_to_image(base64_string, target_size=-1):
     image_data = base64.b64decode(base64_string)
-    image = Image.open(io.BytesIO(image_data))
+    image = _flatten_alpha(Image.open(io.BytesIO(image_data)))
     if image.mode in ('I;16', 'I;16L', 'I;16B', 'I;16N'):
         image = image.convert('I')
     elif image.mode not in ('1', 'L', 'I', 'RGB'):
